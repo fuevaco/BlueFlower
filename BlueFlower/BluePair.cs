@@ -174,8 +174,7 @@ namespace BlueFlower
                     var prslt = await item.DeviceInformation.Pairing.Custom.PairAsync(DevicePairingKinds.ProvidePin, DevicePairingProtectionLevel.None);
                     LogMessage(prslt.Status.ToString());
                 }
-                GattDeviceService.GetDeviceSelectorFromUuid(item.)
-            
+               
             }
 
         }
