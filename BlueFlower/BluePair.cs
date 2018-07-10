@@ -1,14 +1,12 @@
-﻿using InTheHand.Net.Bluetooth;
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Forms;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
-using System.Linq;
-using System.Collections.Generic;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
-using Windows.Foundation;
 using Windows.Devices.Enumeration;
+using Windows.Storage.Streams;
 
 namespace BlueFlower
 {
@@ -18,7 +16,7 @@ namespace BlueFlower
         BluetoothLEAdvertisementWatcher BleWatcher;
         delegate void MessageDelegate(string text);
         ObservableCollection<BluetoothLEDevice> bluetoothLEDevices;
-       
+
         public BlueAPP()
         {
             InitializeComponent();
@@ -34,8 +32,8 @@ namespace BlueFlower
             {
                 foreach (BluetoothLEDevice device in e.NewItems)
                 {
-                    DeviceListAdd(device.Name + "[" + device.DeviceId+ "]");
-                
+                    DeviceListAdd(device.Name + "[" + device.DeviceId + "]");
+
                 }
             }
         }
@@ -83,39 +81,7 @@ namespace BlueFlower
                 DeviceList.Items.Remove(deviceID);
             }
         }
-        private void LocalAdapterInfo(BluetoothRadio bluetoothRadio)
-        {
-            LogMessage("ClassOfDevice: " + bluetoothRadio.ClassOfDevice);
-            LogMessage("HardwareStatus: " + bluetoothRadio.HardwareStatus);
-            LogMessage("HciRevision: " + bluetoothRadio.HciRevision);
-            LogMessage("HciVersion: " + bluetoothRadio.HciVersion);
-            LogMessage("LmpSubversion: " + bluetoothRadio.LmpSubversion);
-            LogMessage("LmpVersion: " + bluetoothRadio.LmpVersion);
-            LogMessage("LocalAddress: " + bluetoothRadio.LocalAddress);
-            LogMessage("Manufacturer: " + bluetoothRadio.Manufacturer);
-            LogMessage("Mode: " + bluetoothRadio.Mode);
-            LogMessage("Name: " + bluetoothRadio.Name);
-            LogMessage("Remote:" + bluetoothRadio.Remote);
-            LogMessage("SoftwareManufacturer: " + bluetoothRadio.SoftwareManufacturer);
-            LogMessage("StackFactory: " + bluetoothRadio.StackFactory);
-        }
 
-        private void Info_Click(object sender, EventArgs e)
-        {
-
-            BluetoothRadio bluetoothRadio = BluetoothRadio.PrimaryRadio;
-
-
-            if (bluetoothRadio == null)
-            {
-                LogMessage("本機沒有藍芽設備");
-            }
-            else
-            {
-                LocalAdapterInfo(bluetoothRadio);
-
-            }
-        }
 
         private void FindBLE_Click(object sender, EventArgs e)
         {
@@ -145,12 +111,12 @@ namespace BlueFlower
 
         private async void BleWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
         {
-            if (!string.IsNullOrEmpty(args.Advertisement.LocalName) && args.Advertisement.LocalName == "Flower care")
+            if (!string.IsNullOrEmpty(args.Advertisement.LocalName) && args.Advertisement.LocalName== "Flower care")
             {
-                
+
                 var device = await BluetoothLEDevice.FromBluetoothAddressAsync(args.BluetoothAddress);
-                
-                if (!bluetoothLEDevices.Any(x=>x.DeviceId == device.DeviceId))
+
+                if (!bluetoothLEDevices.Any(x => x.DeviceId == device.DeviceId))
                 {
                     bluetoothLEDevices.Add(device);
                 }
@@ -165,19 +131,82 @@ namespace BlueFlower
         {
             string id = DeviceList.GetItemText(DeviceList.SelectedItem);
             var item = bluetoothLEDevices.FirstOrDefault(device => device.Name + "[" + device.DeviceId + "]" == id);
-            if(item != null)
+            if (item != null)
             {
-               
-                if (!item.DeviceInformation.Pairing.IsPaired)
-                {
+                item.DeviceInformation.Pairing.Custom.PairingRequested += Custom_PairingRequested;
 
-                    var prslt = await item.DeviceInformation.Pairing.Custom.PairAsync(DevicePairingKinds.ProvidePin, DevicePairingProtectionLevel.None);
-                    LogMessage(prslt.Status.ToString());
+                var result = await item.DeviceInformation.Pairing.Custom.PairAsync(
+                      DevicePairingKinds.ConfirmOnly, DevicePairingProtectionLevel.None);
+                item.DeviceInformation.Pairing.Custom.PairingRequested -= Custom_PairingRequested;
+
+                if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired)
+                {
+                    LogMessage("讀出資料中...");
+
+                    var svcresult = await item.GetGattServicesAsync();
+                   
+                    
+                    if (svcresult.Status == Windows.Devices.Bluetooth.GenericAttributeProfile.GattCommunicationStatus.Success)
+                    {
+                        
+                        // 查詢所有服務
+                        foreach (var service in svcresult.Services)
+                        {
+                            LogMessage("服務:"+service.Uuid.ToString());
+                            var chrresult = await service.GetCharacteristicsAsync();
+                            
+                            // 查詢所有特徵
+                            foreach (var chr in chrresult.Characteristics)
+                            {
+                                LogMessage("  特徵:" + chr.UserDescription + "[" + chr.Uuid + "]");
+                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Read))
+                                {
+
+                                    // 支援讀
+                                    var valueResult = await chr.ReadValueAsync();
+
+                                    var reader = DataReader.FromBuffer(valueResult.Value);
+                                    var input = new byte[reader.UnconsumedBufferLength];
+                                    reader.ReadBytes(input);
+                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援讀(值：" + BitConverter.ToString(input) + ")");
+                                }
+                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Notify))
+                                {
+                                    // 支援訂閱
+                                    var valueResult = await chr.ReadValueAsync();
+
+                                    var reader = DataReader.FromBuffer(valueResult.Value);
+                                    var input = new byte[reader.UnconsumedBufferLength];
+                                    reader.ReadBytes(input);
+                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援訂閱(值：" + BitConverter.ToString(input) + ")");
+
+
+                                }
+                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Write))
+                                {
+                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援寫");
+                                }
+                            }
+
+                        }
+                    }
+
+
+
+
                 }
-               
+                else
+                {
+                    LogMessage("請先配對");
+                }
+
             }
 
         }
 
+        private void Custom_PairingRequested(DeviceInformationCustomPairing sender, DevicePairingRequestedEventArgs args)
+        {
+            args.Accept();
+        }
     }
 }
