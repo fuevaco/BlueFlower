@@ -6,6 +6,7 @@ using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Devices.Enumeration;
+using Windows.Security.Cryptography;
 using Windows.Storage.Streams;
 
 namespace BlueFlower
@@ -131,27 +132,53 @@ namespace BlueFlower
         {
             string id = DeviceList.GetItemText(DeviceList.SelectedItem);
             var item = bluetoothLEDevices.FirstOrDefault(device => device.Name + "[" + device.DeviceId + "]" == id);
+            item =await BluetoothLEDevice.FromIdAsync(item.DeviceId);
             if (item != null)
             {
-                item.DeviceInformation.Pairing.Custom.PairingRequested += Custom_PairingRequested;
+                //item.DeviceInformation.Pairing.Custom.PairingRequested += Custom_PairingRequested;
 
-                var result = await item.DeviceInformation.Pairing.Custom.PairAsync(
-                      DevicePairingKinds.ConfirmOnly, DevicePairingProtectionLevel.None);
-                item.DeviceInformation.Pairing.Custom.PairingRequested -= Custom_PairingRequested;
+                //var result = await item.DeviceInformation.Pairing.Custom.PairAsync(
+                //      DevicePairingKinds.ConfirmOnly, DevicePairingProtectionLevel.None);
+                //item.DeviceInformation.Pairing.Custom.PairingRequested -= Custom_PairingRequested;
 
-                if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired)
-                {
+                //if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired)
+                //{
                     LogMessage("讀出資料中...");
 
                     var svcresult = await item.GetGattServicesAsync();
                     var curService = svcresult.Services.FirstOrDefault(x => x.Uuid == Guid.Parse("00001204-0000-1000-8000-00805f9b34fb"));
                     if (curService != null)
                     {
+
+                        var curCharacteristic = await curService.GetCharacteristicsForUuidAsync(Guid.Parse("00001a00-0000-1000-8000-00805f9b34fb"));
+                        if (curCharacteristic != null)
+                        {
+                            var tempCharacteristic = curCharacteristic.Characteristics.SingleOrDefault();
+                            if (tempCharacteristic != null)
+                            {
+
+
+                                var communicationStatus = await tempCharacteristic.WriteValueAsync(CryptographicBuffer.CreateFromByteArray(new byte[] { 0xa0, 0x1f }));
+                                if (communicationStatus != GattCommunicationStatus.Success)
+                                {
+                                    LogMessage("開啟讀資料模式失敗");
+                                }
+                                else
+                                {
+                                    LogMessage("開啟讀資料模式成功");
+                                }
+
+                            }
+                        }
+
+                    }
+                    if (curService != null)
+                    {
                        
                         var curCharacteristic = await curService.GetCharacteristicsForUuidAsync(Guid.Parse("00001a01-0000-1000-8000-00805f9b34fb"));
                         if ( curCharacteristic !=null)
                         {
-                            var tempCharacteristic = curCharacteristic.Characteristics.FirstOrDefault();
+                            var tempCharacteristic = curCharacteristic.Characteristics.SingleOrDefault();
                             if ( tempCharacteristic != null)
                             {
                                 
@@ -160,10 +187,10 @@ namespace BlueFlower
                                     var input = new byte[reader.UnconsumedBufferLength];
                                     reader.ReadBytes(input);
                                 LogMessage("原始資料："+BitConverter.ToString(input));
-                                LogMessage("溫度：" + BitConverter.ToInt16(input, 0) / 10);
-                                LogMessage("光照：" + BitConverter.ToInt32(input, 3));
-                                LogMessage("溼度：" + input.Skip(6).Take(1).Single()); // 只有一個Byte
-                                LogMessage("肥力：" + BitConverter.ToUInt16(input, 8));
+                                LogMessage("溫度：" + BitConverter.ToInt16(input.Take(2).ToArray(), 0) / 10f);
+                                LogMessage("光照：" + BitConverter.ToInt32(input.Skip(3).Take(4).ToArray(), 0));
+                                LogMessage("溼度：" + input[7]); // 只有一個Byte
+                                LogMessage("肥力：" + BitConverter.ToInt16(input.Skip(8).Take(2).ToArray(), 0));
 
 
                             }
@@ -172,19 +199,19 @@ namespace BlueFlower
                     }
                    
                  
-                }
-                else
-                {
-                    LogMessage("請先配對");
-                }
+                //}
+                //else
+                //{
+                //    LogMessage("請先配對");
+                //}
 
             }
 
         }
 
-        private void Custom_PairingRequested(DeviceInformationCustomPairing sender, DevicePairingRequestedEventArgs args)
-        {
-            args.Accept();
-        }
+        //private void Custom_PairingRequested(DeviceInformationCustomPairing sender, DevicePairingRequestedEventArgs args)
+        //{
+        //    args.Accept();
+        //}
     }
 }
