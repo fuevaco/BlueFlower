@@ -144,56 +144,34 @@ namespace BlueFlower
                     LogMessage("讀出資料中...");
 
                     var svcresult = await item.GetGattServicesAsync();
-                   
-                    
-                    if (svcresult.Status == Windows.Devices.Bluetooth.GenericAttributeProfile.GattCommunicationStatus.Success)
+                    var curService = svcresult.Services.FirstOrDefault(x => x.Uuid == Guid.Parse("00001204-0000-1000-8000-00805f9b34fb"));
+                    if (curService != null)
                     {
-                        
-                        // 查詢所有服務
-                        foreach (var service in svcresult.Services)
+                       
+                        var curCharacteristic = await curService.GetCharacteristicsForUuidAsync(Guid.Parse("00001a01-0000-1000-8000-00805f9b34fb"));
+                        if ( curCharacteristic !=null)
                         {
-                            LogMessage("服務:"+service.Uuid.ToString());
-                            var chrresult = await service.GetCharacteristicsAsync();
-                            
-                            // 查詢所有特徵
-                            foreach (var chr in chrresult.Characteristics)
+                            var tempCharacteristic = curCharacteristic.Characteristics.FirstOrDefault();
+                            if ( tempCharacteristic != null)
                             {
-                                LogMessage("  特徵:" + chr.UserDescription + "[" + chr.Uuid + "]");
-                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Read))
-                                {
-
-                                    // 支援讀
-                                    var valueResult = await chr.ReadValueAsync();
-
-                                    var reader = DataReader.FromBuffer(valueResult.Value);
+                                
+                                    var readResult = await tempCharacteristic.ReadValueAsync();
+                                    var reader = DataReader.FromBuffer(readResult.Value);
                                     var input = new byte[reader.UnconsumedBufferLength];
                                     reader.ReadBytes(input);
-                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援讀(值：" + BitConverter.ToString(input) + ")");
-                                }
-                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Notify))
-                                {
-                                    // 支援訂閱
-                                    var valueResult = await chr.ReadValueAsync();
-
-                                    var reader = DataReader.FromBuffer(valueResult.Value);
-                                    var input = new byte[reader.UnconsumedBufferLength];
-                                    reader.ReadBytes(input);
-                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援訂閱(值：" + BitConverter.ToString(input) + ")");
+                                LogMessage("原始資料："+BitConverter.ToString(input));
+                                LogMessage("溫度：" + BitConverter.ToInt16(input, 0) / 10);
+                                LogMessage("光照：" + BitConverter.ToInt32(input, 3));
+                                LogMessage("溼度：" + input.Skip(6).Take(1).Single()); // 只有一個Byte
+                                LogMessage("肥力：" + BitConverter.ToUInt16(input, 8));
 
 
-                                }
-                                if (chr.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Write))
-                                {
-                                    LogMessage("    " + chr.AttributeHandle.ToString() + "支援寫");
-                                }
                             }
-
                         }
+
                     }
-
-
-
-
+                   
+                 
                 }
                 else
                 {
