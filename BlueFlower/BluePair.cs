@@ -39,12 +39,6 @@ namespace BlueFlower
             }
         }
 
-        private void BluePair_Click(object sender, EventArgs e)
-        {
-
-
-        }
-
 
         private void LogMessage(string message)
         {
@@ -135,14 +129,7 @@ namespace BlueFlower
             item =await BluetoothLEDevice.FromIdAsync(item.DeviceId);
             if (item != null)
             {
-                //item.DeviceInformation.Pairing.Custom.PairingRequested += Custom_PairingRequested;
-
-                //var result = await item.DeviceInformation.Pairing.Custom.PairAsync(
-                //      DevicePairingKinds.ConfirmOnly, DevicePairingProtectionLevel.None);
-                //item.DeviceInformation.Pairing.Custom.PairingRequested -= Custom_PairingRequested;
-
-                //if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired)
-                //{
+               
                     LogMessage("讀出資料中...");
 
                     var svcresult = await item.GetGattServicesAsync();
@@ -197,21 +184,10 @@ namespace BlueFlower
                         }
 
                     }
-                   
-                 
-                //}
-                //else
-                //{
-                //    LogMessage("請先配對");
-                //}
-
+              
             }
 
         }
 
-        //private void Custom_PairingRequested(DeviceInformationCustomPairing sender, DevicePairingRequestedEventArgs args)
-        //{
-        //    args.Accept();
-        //}
     }
 }
